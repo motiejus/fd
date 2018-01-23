@@ -2,11 +2,14 @@ package main
 
 import (
 	"flag"
-	"github.com/ftrvxmtrx/fd"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"strconv"
+	"time"
+
+	"github.com/ftrvxmtrx/fd"
 )
 
 var (
@@ -32,15 +35,10 @@ func main() {
 		log.Fatal(err)
 	}
 	defer tcpl.Close()
+	go accepter(tcpl)
 
-	var c net.Conn
-	c, err = tcpl.Accept()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer c.Close()
 	var f *os.File
-	f, err = c.(*net.TCPConn).File()
+	f, err = tcpl.(*net.TCPListener).File()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -62,5 +60,28 @@ func main() {
 	listenConn := a.(*net.UnixConn)
 	if err = fd.Put(listenConn, f); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func echo(c net.Conn) {
+	for {
+		if _, err := fmt.Fprintf(c, "hello from sender\n"); err != nil {
+			fmt.Printf("connection closed: %s\n", err.Error())
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func accepter(tcpl net.Listener) {
+	for {
+		var c net.Conn
+		var err error
+		c, err = tcpl.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer c.Close()
+		go echo(c)
 	}
 }
