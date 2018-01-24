@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
-	"github.com/ftrvxmtrx/fd"
-	"io"
+	"fmt"
 	"log"
 	"net"
 	"os"
+	"time"
+
+	"github.com/ftrvxmtrx/fd"
 )
 
 var (
@@ -32,24 +34,43 @@ func main() {
 	defer c.Close()
 	fdConn := c.(*net.UnixConn)
 
+	log.Println("waiting for an fd...")
 	var fs []*os.File
 	fs, err = fd.Get(fdConn, 1, []string{"a file"})
 	if err != nil {
 		log.Fatal(err)
 	}
 	f := fs[0]
-	defer f.Close()
+	log.Println("fd received")
 
+	tcpl, err := net.FileListener(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	f.Close()
+	accepter(tcpl)
+}
+
+func accepter(tcpl net.Listener) {
 	for {
-		b := make([]byte, 4096)
-		var n int
-		n, err = f.Read(b)
-		if err == io.EOF {
-			break
-		} else if err != nil {
+		var c net.Conn
+		var err error
+		c, err = tcpl.Accept()
+		if err != nil {
 			log.Fatal(err)
 		}
+		log.Println("accepted connection")
+		go echo(c)
+	}
+}
 
-		log.Printf("%s", b[:n])
+func echo(c net.Conn) {
+	for {
+		if _, err := fmt.Fprintf(c, "hello from receiver\n"); err != nil {
+			log.Printf("write error: %s\n", err.Error())
+			c.Close()
+			return
+		}
+		time.Sleep(1 * time.Second)
 	}
 }
